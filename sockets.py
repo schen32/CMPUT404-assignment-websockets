@@ -59,29 +59,47 @@ class World:
     def world(self):
         return self.space
 
-myWorld = World()        
+myWorld = World()
 
 def set_listener( entity, data ):
     ''' do something with the update ! '''
+    print(f"Entity {entity} updated with new data: {data}")
 
 myWorld.add_set_listener( set_listener )
         
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return None
+    return flask.redirect("/static/index.html")
 
 def read_ws(ws,client):
     '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
-    return None
+    while not ws.closed:
+        # read incoming message
+        message = ws.receive()
+        if message:
+            # parse message as JSON
+            worldData = json.loads(message)
+            # set entity data pairs
+            for entity in worldData:
+                myWorld.set(entity, worldData[entity])
+
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
     '''Fufill the websocket URL of /subscribe, every update notify the
        websocket and read updates from the websocket '''
-    # XXX: TODO IMPLEMENT ME
-    return None
+
+    client = str(time.time())
+    g = gevent.spawn(read_ws, ws, client)
+
+    while not ws.closed:
+        # send world updates to clients
+        worldUpdate = myWorld.world()
+        ws.send(json.dumps(worldUpdate))
+        gevent.sleep(0.1)
+
+    gevent.kill(g)
 
 
 # I give this to you, this is how you get the raw body/data portion of a post in flask
@@ -99,23 +117,28 @@ def flask_post_json():
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
     '''update the entities via this interface'''
-    return None
+    data = flask_post_json()
+    for key in data:
+        myWorld.update(entity, key, data[key])
+    return json.dumps(myWorld.get(entity))
 
 @app.route("/world", methods=['POST','GET'])    
 def world():
     '''you should probably return the world here'''
-    return None
+    return json.dumps(myWorld.world())
 
 @app.route("/entity/<entity>")    
 def get_entity(entity):
     '''This is the GET version of the entity interface, return a representation of the entity'''
-    return None
+    return json.dumps(myWorld.get(entity))
 
 
 @app.route("/clear", methods=['POST','GET'])
 def clear():
     '''Clear the world out!'''
-    return None
+    myWorld.clear()
+    return json.dumps({'message': 'World cleared'})
+
 
 
 
